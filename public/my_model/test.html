@@ -1,0 +1,155 @@
+<!-- This file is just to test which pose is actually matching with assigned pose. Tracks are not assigned to any poses in this file -->
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <!-- <div>Teachable Machine Pose Model</div> -->
+    <p>Pose 1 : left hand front</p>
+    <p>Pose 2 : both hands front</p>
+    <p>Pose 3 : left hand on right shoulder</p>
+    <p>Pose 4 : both hands on opposite shoulders</p>
+    <p>Pose 5 : both hands bottom right</p>
+    <p>Pose 6 : both hands bottom left</p>
+
+
+    <button type="button" onclick="init()">Start</button>
+    <div><canvas id="canvas"></canvas></div>
+    <div id="label-container"></div>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+    <script type="text/javascript">
+        // More API functions here:
+        // https://github.com/googlecreativelab/teachablemachine-community/tree/master/libraries/pose
+
+        // the link to your model provided by Teachable Machine export panel
+        const URL = "./my_model/";
+        let model, webcam, ctx, labelContainer, maxPredictions;
+
+        let previousActiveGesture = null;
+
+        async function init() {
+            const modelURL = "./model.json";
+            const metadataURL = "./metadata.json";
+
+            // load the model and metadata
+            // Refer to tmImage.loadFromFiles() in the API to support files from a file picker
+            // Note: the pose library adds a tmPose object to your window (window.tmPose)
+            model = await tmPose.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            // Convenience function to setup a webcam
+            const widthSize = 1800;
+            const heightSize = 1000;
+
+            // const widthSize = window.innerWidth; // 100vw
+            // const heightSize = window.innerHeight; //100vh
+
+            const flip = true; // whether to flip the webcam
+            webcam = new tmPose.Webcam(widthSize, heightSize, flip); // width, height, flip
+            await webcam.setup(); // request access to the webcam
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+            // append/get elements to the DOM
+            const canvas = document.getElementById("canvas");
+            
+            canvas.width = widthSize; 
+            canvas.height = heightSize;
+            
+            ctx = canvas.getContext("2d");
+            labelContainer = document.getElementById("label-container");
+            for (let i = 0; i < maxPredictions; i++) { // and class labels
+                labelContainer.appendChild(document.createElement("div"));
+            }
+        }
+
+        async function loop(timestamp) {
+            webcam.update(); // update the webcam frame
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        async function predict() {
+            // Prediction #1: run input through posenet
+            // estimatePose can take in an image, video or canvas html element
+            const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
+            // Prediction 2: run input through teachable machine classification model
+            const prediction = await model.predict(posenetOutput);
+
+            let activeGesture = null;
+            let activeGestureValue = 0;
+
+            for (let i = 0; i < maxPredictions; i++) {
+                const pridictValue = prediction[i].probability.toFixed(2);
+                const classPrediction =
+                    prediction[i].className + ": " + pridictValue;
+                labelContainer.childNodes[i].innerHTML = classPrediction;
+
+                if (pridictValue > activeGestureValue) {
+                    activeGesture = prediction[i].className;
+                    activeGestureValue = pridictValue;
+                }
+
+                if (activeGesture !== previousActiveGesture && activeGestureValue > 0.8) {
+                    console.log('activeGesture', activeGesture, activeGestureValue, previousActiveGesture)
+                    playMusic(activeGesture);
+                    previousActiveGesture = activeGesture;
+
+                }
+
+            }
+
+
+            // playMusic(activeGesture);
+
+            // finally draw the poses
+            drawPose(pose);
+        }
+
+        function playMusic(pose) {
+            const audio = new Audio();
+
+            if (pose === 'pose1') {
+                audio.src = './tracks/audio_1.mp3';
+            } else if (pose === 'pose2') {
+                audio.src = './tracks/audio_2.mp3';
+            }else if (pose === 'pose2') {
+                audio.src = './tracks/audio_2.mp3';
+            }else if (pose === 'pose3') {
+                audio.src = './tracks/audio_3.mp3';
+            }else if (pose === 'pose4') {
+                audio.src = './tracks/audio_4.mp3';
+            }else if (pose === 'pose5') {
+                audio.src = './tracks/audio_5.mp3';
+            }else if (pose === 'pose6') {
+                audio.src = './tracks/audio_6.mp3';
+            }
+
+            console.log('audio', audio)
+            // audio.play();
+        }
+
+        function drawPose(pose) {
+            if (webcam.canvas) {
+                ctx.drawImage(webcam.canvas, 0, 0);
+                // draw the keypoints and skeleton
+                if (pose) {
+                    const minPartConfidence = 0.5;
+                    tmPose.drawKeypoints(pose.keypoints, minPartConfidence, ctx);
+                    tmPose.drawSkeleton(pose.keypoints, minPartConfidence, ctx);
+                }
+            }
+        }
+    </script>
+
+</body>
+
+</html>
